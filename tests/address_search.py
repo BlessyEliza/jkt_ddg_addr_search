@@ -18,6 +18,17 @@ def get_public_ip():
         return None
 
 
+import socks
+import socket
+from stem import Signal
+from stem.control import Controller
+from duckduckgo_search import DDGS
+import requests
+
+def change_tor_identity():
+    with Controller.from_port(port=9051) as controller:
+        controller.authenticate(password="password123")  # Replace "your_password" with your actual Tor password
+        controller.signal(Signal.NEWNYM)
 
 import asyncio
 import logging
@@ -30,10 +41,6 @@ from time import sleep
 import csv
 import os
 from prometheus_client import start_http_server, Counter, Histogram
-
-
-
-
 
 
 
@@ -130,6 +137,10 @@ def update_csv(row, header, mode='a'):
 
 
 def main():
+    # Connect to Tor network
+    socks.setdefaultproxy(socks.PROXY_TYPE_SOCKS5, "127.0.0.1", 9050)
+    socket.socket = socks.socksocket
+
     logging.info("Starting main process.")
     if not os.path.exists(INPUT_CSV_FILE_PATH):
         logging.info("CSV file not found. Fetching data from the database...")
@@ -156,6 +167,7 @@ def main():
 
         for index, row in tqdm(df.iloc[start_index:].iterrows(), initial=start_index, total=df.shape[0]):
             try:
+                change_tor_identity()  # Change Tor identity before each request
                 search = 'address of ' + row['address_string']
                 #sleep(2)  # Rate limit
                 print("Starting...", index)
