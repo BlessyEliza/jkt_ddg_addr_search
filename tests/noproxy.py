@@ -1,7 +1,7 @@
 import psycopg2
 import asyncio
 from psycopg2 import Error
-from duckduckgo_search import AsyncDDGS
+
 import os
 from time import sleep
 from tqdm import tqdm
@@ -105,12 +105,12 @@ import os
 # Function to combine all CSV files in the output folder into output.csv
 def combine_output_files():
     output_folder = 'output'
-    output_csv = 'output.csv'
+    output_csv = 'output_final.csv'
     output_files = [file for file in os.listdir(output_folder) if file.endswith('.csv')]
 
     # Check if any CSV files exist in the output folder
     if not output_files:
-        main_logger.info("No CSV files found in the output folder.")
+        print("No CSV files found in the output folder.")
         return
 
     # Initialize an empty DataFrame to hold the combined data
@@ -119,18 +119,27 @@ def combine_output_files():
     # Loop through each CSV file and append its data to the combined DataFrame
     for file in output_files:
         file_path = os.path.join(output_folder, file)
-        df = pd.read_csv(file_path)
+        # Read CSV file, removing leading commas from each row
+        df = pd.read_csv(file_path, header=None, names=[str(i) for i in range(100)])
+
+        # Convert all columns to strings
+        df = df.astype(str)
+
+        # Remove leading commas from each cell
+        df = df.apply(lambda x: x.str.lstrip(','))  # Remove leading commas
+
         combined_df = combined_df.append(df, ignore_index=True)
 
     # Write the combined DataFrame to output.csv
     combined_df.to_csv(output_csv, index=False)
-    main_logger.info(f"Combined data from {len(output_files)} CSV files into {output_csv}.")
+    print(f"Combined data from {len(output_files)} CSV files into {output_csv}.")
 
 
 
 
 
-async def getAddress(word, core_logger, retries=0):
+
+def getAddress(word, core_logger, retries=0):
     print("entred getAddress")
     global get_address_call_count, current_proxy, results, operation_completed
       # Reset timeout flag at the beginning of the function
@@ -142,7 +151,7 @@ async def getAddress(word, core_logger, retries=0):
         core_logger.warning(f"Skipping empty search term: {word}")
         return []
     try:
-        current_proxy = None
+        current_proxy = "socks5://localhost:9150"
         # First attempt without proxy, if retries are 0 and no proxy set
 
         # If first attempt fails, retry with proxy
@@ -150,10 +159,10 @@ async def getAddress(word, core_logger, retries=0):
             print("getting proxy......")
             current_proxy = get_proxy_ip(core_logger)
         print("Calling DDGS with proxy")
-        ddgs = AsyncDDGS(proxies=current_proxy)
+        ddgs = DDGS(proxies=current_proxy)
         print(ddgs)
         print("Getting results")
-        results = await ddgs.text(word, max_results=5, backend="html")
+        results = ddgs.text(word, max_results=5, backend="html")
         if results:
             print("got results .. going to next record")
             operation_completed = True  # Indicate that the operation has completed to stop the timeout thread
@@ -269,36 +278,65 @@ def is_proxy_fast(proxy,core_logger):
 
     
 
-def fetch_and_save_proxies(proxy_list_path, limit=50):
-    url = 'https://free-proxy-list.net/'
 
-    response = requests.get(url, verify=False)
+import requests
+from requests.exceptions import ChunkedEncodingError
+import time
+
+def fetch_proxies_with_retry(url, retries=3):
+    for _ in range(retries):
+        try:
+            response = requests.get(url, verify=False)
+            response.raise_for_status()  # Raise an error for non-200 status codes
+            return response
+        except ChunkedEncodingError as e:
+            print(f"ChunkedEncodingError occurred: {e}. Retrying...")
+            time.sleep(1)  # Wait for a short duration before retrying
+            continue
+        except requests.RequestException as e:
+            print(f"RequestException occurred: {e}")
+            break
+    return None
+
+def fetch_and_save_proxies(proxy_list_path, limit=50):
+    proxy_websites = [
+        'https://free-proxy-list.net/',
+        'https://www.sslproxies.org/',
+        'https://www.us-proxy.org/',
+        'https://www.socks-proxy.net/',
+        'https://www.proxy-list.download/',
+        'https://www.proxynova.com/proxy-server-list/',
+        'https://www.proxy-list.org/english/index.php',
+        'https://free-proxy-list.net/uk-proxy.html',
+        'https://www.proxyscrape.com/free-proxy-list',
+        'https://www.proxy-list.download/HTTP'
+    ]
+
     proxies = []
 
-    if response.status_code == 200:
-        soup = BeautifulSoup(response.content, 'html.parser')
-        table = soup.find('table', {'class': 'table table-striped table-bordered'})
-        row_count = 0
-        if table is not None:
-            for tr in table.find_all('tr'):
-                if row_count >= limit:  # Stop when the limit is reached
-                    break
-                row = [td.text.strip() for td in tr.find_all('td')]
-                if row:
-                    protocol = "https" if row[6] == "yes" else "http"
-                    proxy_url = f"{protocol}://{row[0]}:{row[1]}"
-                    proxies.append(proxy_url)
-                    row_count += 1
+    for url in proxy_websites:
+        response = fetch_proxies_with_retry(url)
+        if response is not None and response.status_code == 200:
+            soup = BeautifulSoup(response.content, 'html.parser')
+            table = soup.find('table', {'class': 'table table-striped table-bordered'})
+            row_count = 0
+            if table is not None:
+                for tr in table.find_all('tr'):
+                    if row_count >= limit:  # Stop when the limit is reached
+                        break
+                    row = [td.text.strip() for td in tr.find_all('td')]
+                    if row:
+                        protocol = "https" if row[6] == "yes" else "http"
+                        proxy_url = f"{protocol}://{row[0]}:{row[1]}"
+                        proxies.append(proxy_url)
+                        row_count += 1
 
-        with open(proxy_list_path, 'w') as f:
-            f.write('\n'.join(proxies))
+    with open(proxy_list_path, 'w') as f:
+        f.write('\n'.join(proxies))
 
-    else:
-        print("Failed to fetch proxy list.")
-        if not os.path.exists(proxy_list_path):
-            # If we can't fetch new proxies and no file exists, create an empty file.
-            open(proxy_list_path, 'a').close()
     return proxy_list_path
+
+
 
 def load_proxies(proxy_list_path):
     with open(proxy_list_path, 'r') as f:
@@ -399,7 +437,7 @@ def start_timeout_timer(record_id, core_logger,timeout=30):
     timer.start()
     return timer
 
-async def scrape_data(records_chunk, chunk_name, core_id):
+def scrape_data(records_chunk, chunk_name, core_id):
 
     # Function to process a chunk of records
     core_logger = get_core_logger(core_id)
@@ -423,7 +461,7 @@ async def scrape_data(records_chunk, chunk_name, core_id):
             results = []
             for term in search_terms:
                 print("Calling getAddress")
-                results = await getAddress(term,core_logger=core_logger)
+                results = getAddress(term,core_logger=core_logger)
                 print("out of getAddress")
                 core_logger.info(f"Got Results {results}")
                 if results:
@@ -442,7 +480,7 @@ async def scrape_data(records_chunk, chunk_name, core_id):
                     result_df = pd.DataFrame([row])
                     print(result_df)
                     print("writing results")
-                    result_df.to_csv("output/"+output_file_path+"_"+core_id+"_"+chunk_name+".csv", mode='a', header=write_header, index=False)
+                    result_df.to_csv("output/p1/"+output_file_path+"_"+str(core_id)+"_"+str(chunk_name)+".csv", mode='a', header=write_header, index=False)
                     write_header = False
             #api_requests_counter.inc()  # Increment Prometheus counter for each API request
             #main_logger.info("API Count"+api_requests_counter)
@@ -504,7 +542,7 @@ def read_failed_ids():
     return failed_ids
 
 
-def get_processed_ids(output_file='output.csv'):
+def get_processed_ids(output_file='output_final.csv'):
     if not os.path.exists(output_file) or os.stat(output_file).st_size == 0:
         return []
     df = pd.read_csv(output_file)
@@ -541,7 +579,7 @@ import multiprocessing
 import uuid
 
 
-async def process_chunk_worker(core_id, input_queue, processed_chunks):
+def process_chunk_worker(core_id, input_queue, processed_chunks):
     print("in process_chunk_worker")
     while True:
         try:
@@ -558,7 +596,7 @@ async def process_chunk_worker(core_id, input_queue, processed_chunks):
             main_logger.info(f"Core {core_id} processing chunk: {chunk_name}")
 
             print("calling crape_data func")
-            result = await scrape_data(chunk_data, chunk_name, core_id)
+            result = scrape_data(chunk_data, chunk_name, core_id)
             result = f"Processed {chunk_name}"
 
             processed_chunks[chunk_name] = True
@@ -569,21 +607,18 @@ async def process_chunk_worker(core_id, input_queue, processed_chunks):
             main_logger.info(f"Core {core_id} - Queue is empty. No more chunks to process.")
             break
 
-async def process_records():
+def process_records():
     # Check and create output directory
     check_and_create_output_directory()
 
     # Load records from CSV or fetch from DB
-    records_csv = 'db_records.csv'
+    records_csv = 'io_priority_1/output_file_1.csv'
     records = []
     if file_exists(records_csv):
         main_logger.info("Reading records from CSV file.")
         records_df = read_records_from_csv(records_csv)
         records = records_df.values.tolist()
-    else:
-        main_logger.info("Fetching records from the database and saving to CSV.")
-        records_df = fetch_data_from_db_and_save_to_csv(records_csv)
-        records = records_df.values.tolist()
+
 
     if not records:
         main_logger.warning("No records fetched. Exiting.")
@@ -609,6 +644,7 @@ async def process_records():
 
         # Multiprocessing
         num_cores = multiprocessing.cpu_count()
+        num_cores = 15
         main_logger.info(f"Number of CPU cores available: {num_cores}")
 
         chunk_size = 100
@@ -642,10 +678,10 @@ async def process_records():
 
 
 
-async def main():
+def main():
     start_time_main = time.time()
     main_logger.debug("Starting main function...")
-    done = await asyncio.create_task(process_records())  # Execute process_records asynchronously
+    done = process_records() # Execute process_records asynchronously
     main_logger.debug(f"process_records completed with status: {done}")
     if done:
         main_logger.info("Combining all output files.....")
@@ -658,4 +694,4 @@ async def main():
         main_logger.info("Not Completed")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
