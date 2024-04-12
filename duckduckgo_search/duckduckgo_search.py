@@ -10,7 +10,7 @@ from .duckduckgo_search_async import AsyncDDGS
 class DDGS(AsyncDDGS):
     _loop: asyncio.AbstractEventLoop = asyncio.new_event_loop()
     Thread(target=_loop.run_forever, daemon=True).start()  # Start the event loop run in a separate thread.
-
+    print("creating instance")
     def __init__(
         self,
         headers: Optional[Dict[str, str]] = None,
