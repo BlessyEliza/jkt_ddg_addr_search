@@ -1,9 +1,8 @@
 import os
 import pandas as pd
 
-
 def combine_output_files():
-    output_folder = 'output'
+    output_folder = 'output/p1_4'
     output_csv = 'output.csv'
     output_files = [file for file in os.listdir(output_folder) if file.endswith('.csv')]
 
@@ -27,16 +26,23 @@ def combine_output_files():
         # Remove leading commas from each cell
         df = df.apply(lambda x: x.str.lstrip(','))  # Remove leading commas
 
+        # Set the first column name to "id"
+        df.rename(columns={0: 'id'}, inplace=True)
+
+        # Remove 4th column onwards
+        df = df.iloc[:, :4]  # Keep columns up to index 2 (0-based indexing)
+
+        # Rename columns to "id," "website," and "results"
+        df.columns = ['id', 'website', 'results','extra']
+
         combined_df = combined_df.append(df, ignore_index=True)
 
-    # Write the combined DataFrame to output.csv
+    # Write the combined DataFrame to output.csv with updated column names
     combined_df.to_csv(output_csv, index=False)
     print(f"Combined data from {len(output_files)} CSV files into {output_csv}.")
 
-
 def main():
     combine_output_files()
-
 
 if __name__ == "__main__":
     main()
