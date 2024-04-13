@@ -2,42 +2,28 @@ import os
 import pandas as pd
 
 def combine_output_files():
-    output_folder = 'output/p1_4'
+    output_folder = 'output\p1'
     output_csv = 'output.csv'
     output_files = [file for file in os.listdir(output_folder) if file.endswith('.csv')]
 
-    # Check if any CSV files exist in the output folder
     if not output_files:
         print("No CSV files found in the output folder.")
         return
 
-    # Initialize an empty DataFrame to hold the combined data
-    combined_df = pd.DataFrame()
+    combined_df = pd.DataFrame()  # Initialize outside the loop
 
-    # Loop through each CSV file and append its data to the combined DataFrame
     for file in output_files:
         file_path = os.path.join(output_folder, file)
-        # Read CSV file, removing leading commas from each row
         df = pd.read_csv(file_path, header=None, names=[str(i) for i in range(100)])
-
-        # Convert all columns to strings
         df = df.astype(str)
+        df = df.apply(lambda x: x.str.lstrip(','))
 
-        # Remove leading commas from each cell
-        df = df.apply(lambda x: x.str.lstrip(','))  # Remove leading commas
-
-        # Set the first column name to "id"
         df.rename(columns={0: 'id'}, inplace=True)
+        df = df.iloc[:, :4]
+        df.columns = ['id', 'website', 'results', 'extra']
 
-        # Remove 4th column onwards
-        df = df.iloc[:, :4]  # Keep columns up to index 2 (0-based indexing)
+        combined_df = pd.concat([combined_df, df], ignore_index=True)  # Use concat instead of append
 
-        # Rename columns to "id," "website," and "results"
-        df.columns = ['id', 'website', 'results','extra']
-
-        combined_df = combined_df.append(df, ignore_index=True)
-
-    # Write the combined DataFrame to output.csv with updated column names
     combined_df.to_csv(output_csv, index=False)
     print(f"Combined data from {len(output_files)} CSV files into {output_csv}.")
 

@@ -162,7 +162,7 @@ def getAddress(word, core_logger, retries=0):
         ddgs = DDGS(proxies=current_proxy)
         print(ddgs)
         print("Getting results")
-        results = ddgs.text(word, max_results=5, backend="html")
+        results = ddgs.text(word, max_results=5, backend="api")
         if results:
             print("got results .. going to next record")
             operation_completed = True  # Indicate that the operation has completed to stop the timeout thread
@@ -542,7 +542,7 @@ def read_failed_ids():
     return failed_ids
 
 
-def get_processed_ids(output_file='output_final.csv'):
+def get_processed_ids(output_file='output.csv'):
     if not os.path.exists(output_file) or os.stat(output_file).st_size == 0:
         return []
     df = pd.read_csv(output_file)
@@ -612,7 +612,7 @@ def process_records():
     check_and_create_output_directory()
 
     # Load records from CSV or fetch from DB
-    records_csv = 'io_priority_1/output_file_1.csv'
+    records_csv = 'io_priority_1/output_file_2.csv'
     records = []
     if file_exists(records_csv):
         main_logger.info("Reading records from CSV file.")
@@ -644,7 +644,7 @@ def process_records():
 
         # Multiprocessing
         num_cores = multiprocessing.cpu_count()
-        num_cores = 15
+        
         main_logger.info(f"Number of CPU cores available: {num_cores}")
 
         chunk_size = 100

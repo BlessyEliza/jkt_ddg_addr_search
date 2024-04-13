@@ -1,0 +1,7 @@
+asyncio
+beautifulsoup4
+duckduckgo-search
+psycopg2
+pandas
+prometheus-client
+
