@@ -42,7 +42,13 @@ import csv
 import os
 from prometheus_client import start_http_server, Counter, Histogram
 
+proxies_list = {}
 
+def getProxies():
+    with open("proxies.txt") as f:
+        for line in f:
+            (k, v) = line.split("|")
+            proxies_list[k] = v
 
 # Initialize Prometheus metrics server
 start_http_server(8000)
@@ -114,9 +120,8 @@ def load_checkpoint():
 async def aget_results(word):
     logging.debug(f"Fetching results for: {word}")
     #ddgs = DDGS(proxies="socks5://localhost:9150", timeout=20)
-    ddgs = DDGS(proxies=None, timeout=20)
+    ddgs = DDGS(proxies=proxies_list, timeout=20)
     results = ddgs.text(word, max_results=4, backend="api")
-
     return results
 
 
